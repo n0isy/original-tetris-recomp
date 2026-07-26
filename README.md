@@ -73,7 +73,7 @@ as they were:
 | `SCORES` | drain typed-ahead keys before reading the player's name |
 | `WAIT` — whole body | delay calibrated against the terminal status register, so speed follows the terminal, not the CPU |
 | `KEY` | take a key without waiting; empty buffer leaves `CHR(0)` |
-| main, once | `BIS #^O10100,@#^O44` — non-blocking, no-echo terminal mode |
+| main, once | now plain Pascal: `JSW ORIGIN 44B` + `JSW := JSW OR 10100B` — same `BIS` instruction; the ORIGIN idiom is attested by period editors found on the tapes |
 | main, game over | drain keys pressed during play before "another game?" |
 
 Everything else is plain Pascal. The randomness is the player: how long they
