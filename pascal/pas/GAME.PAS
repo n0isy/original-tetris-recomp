@@ -1,60 +1,60 @@
 (*$T-,A-*)
-program tetris;
-label 1;
+PROGRAM TETRIS;
+LABEL 1;
 
-type
-  VEC4 = array[1..4] of integer;
-  SHP = record
+TYPE
+  VEC4 = ARRAY[1..4] OF INTEGER;
+  SHP = RECORD
           DX, DY : VEC4
-        end;
-  GRP = record
-          EY, RC, CH : integer
-        end;
-  STR30 = packed array[1..30] of char;
-  PAN = record case boolean of
-          false : (G : array[1..5] of GRP);
-          true  : (S : STR30)
-        end;
+        END;
+  GRP = RECORD
+          EY, RC, CH : INTEGER
+        END;
+  STR30 = PACKED ARRAY[1..30] OF CHAR;
+  PAN = RECORD CASE BOOLEAN OF
+          FALSE : (G : ARRAY[1..5] OF GRP);
+          TRUE  : (S : STR30)
+        END;
   PPAN = ^PAN;
   PSHP = ^SHP;
-  SCOREC = record
-             NAME : packed array[1..16] of char;
-             LVL  : integer;
+  SCOREC = RECORD
+             NAME : PACKED ARRAY[1..16] OF CHAR;
+             LVL  : INTEGER;
              SCR  : 0..65535
-           end;
+           END;
 
-var
-  NXT   : array[1..19] of integer;
-  SHAPE : array[1..19] of SHP;
+VAR
+  NXT   : ARRAY[1..19] OF INTEGER;
+  SHAPE : ARRAY[1..19] OF SHP;
   CUR   : PSHP;
-  WELL  : array[0..11] of array[0..21] of char;
+  WELL  : ARRAY[0..11] OF ARRAY[0..21] OF CHAR;
   ERAP  : PPAN;
   DRWP  : PPAN;
   ERASE : PAN;
   DRAW  : PAN;
-  PAUSE : integer;
-  CURPC : integer;
-  NXTPC : integer;
-  SHOWN : boolean;
-  XPOS  : integer;
-  YPOS  : integer;
-  LANDED: boolean;
-  TICKS : integer;
-  CNT   : array[0..20] of integer;
-  LEVEL : integer;
+  PAUSE : INTEGER;
+  CURPC : INTEGER;
+  NXTPC : INTEGER;
+  SHOWN : BOOLEAN;
+  XPOS  : INTEGER;
+  YPOS  : INTEGER;
+  LANDED: BOOLEAN;
+  TICKS : INTEGER;
+  CNT   : ARRAY[0..20] OF INTEGER;
+  LEVEL : INTEGER;
   SCORE : 0..65535;
-  ESCCH : char;
-  FILLCH: char;
-  PAD2  : packed array[1..2] of char;
-  ANS   : char;
-  PAD3  : packed array[1..2] of char;
-  LINES : integer;
-  QUOTA : array[0..9] of integer;
-  CELL  : integer;
-  HIGH  : array[1..20] of SCOREC;
+  ESCCH : CHAR;
+  FILLCH: CHAR;
+  PAD2  : PACKED ARRAY[1..2] OF CHAR;
+  ANS   : CHAR;
+  PAD3  : PACKED ARRAY[1..2] OF CHAR;
+  LINES : INTEGER;
+  QUOTA : ARRAY[0..9] OF INTEGER;
+  CELL  : INTEGER;
+  HIGH  : ARRAY[1..20] OF SCOREC;
 
-procedure KEYIN(var C : char);
-begin
+PROCEDURE KEYIN(VAR C : CHAR);
+BEGIN
 (*$C
 	MOV	%1,SAVR1
 	CLR	%1
@@ -71,80 +71,80 @@ DELAY:	.WORD	0
 SAVR1:	.WORD	0
 KEYX:
 *)
-end;
+END;
 
-function RANDOM(N : integer) : integer;
-var R : real;
+FUNCTION RANDOM(N : INTEGER) : INTEGER;
+VAR R : REAL;
     SEED : 0..65535;
-begin
+BEGIN
 (*$C	MOV	DELAY,SEED(6) *)
-  SEED := (SEED * 13077 + 6925) mod 32768;
+  SEED := (SEED * 31425B + 15415B) MOD 100000B;
   R := SEED / 32768.0;
   RANDOM := TRUNC(R * N);
 (*$C	MOV	SEED(6),DELAY *)
-end;
+END;
 
-procedure GOTOXY(COL, ROW : integer);
-begin
-  write(chr(27), 'Y', chr(ROW+32), chr(COL+32))
-end;
+PROCEDURE GOTOXY(COL, ROW : INTEGER);
+BEGIN
+  WRITE(CHR(33B), 'Y', CHR(ROW+40B), CHR(COL+40B))
+END;
 
-procedure CLS;
-begin
-  write(chr(27), 'H', chr(27), 'J')
-end;
+PROCEDURE CLS;
+BEGIN
+  WRITE(CHR(33B), 'H', CHR(33B), 'J')
+END;
 
-procedure SCORES(ALVL, ASCR : integer);
-var I, J : integer;
+PROCEDURE SCORES(ALVL, ASCR : INTEGER);
+VAR I, J : INTEGER;
     ENTRY : SCOREC;
-    PLACED : boolean;
-begin
+    PLACED : BOOLEAN;
+BEGIN
   GOTOXY(0, 15);
-  write(chr(14), 'wa{e imq?');
+  WRITE(CHR(16B), 'wa{e imq?');
 (*$C
 1$:	EMT	^O340
 	BCC	1$
 *)
-  read(ENTRY.NAME);
-  readln;
+  READ(ENTRY.NAME);
+  READLN;
   ENTRY.SCR := ASCR;
   ENTRY.LVL := ALVL;
   CLS;
   I := 1;
-  PLACED := true;
-  write('
+  PLACED := TRUE;
+  WRITE('
 ', FILLCH, FILLCH, 'imq        urowenx  s~et');
-  writeln;
-  while (HIGH[I].SCR > ENTRY.SCR) and (I < 20) and (HIGH[I].NAME[1] <> ' ') do
-    with HIGH[I] do begin
-      write(FILLCH, FILLCH, NAME, ' ', LVL:1, ' ', SCR:5);
-      writeln;
+  WRITELN;
+  WHILE (HIGH[I].SCR > ENTRY.SCR) AND (I < 20) AND (HIGH[I].NAME[1] # ' ') DO
+    WITH HIGH[I] DO BEGIN
+      WRITE(FILLCH, FILLCH, NAME, ' ', LVL:1, ' ', SCR:5);
+      WRITELN;
       I := I + 1
-    end;
-  if ENTRY.NAME[1] <> ' ' then begin
-    with ENTRY do begin
-      write(FILLCH, FILLCH, NAME, ' ', LVL:1, ' ', SCR:5, ' **');
-      writeln
-    end;
-    for J := 19 downto I do
+    END;
+  IF ENTRY.NAME[1] # ' ' THEN BEGIN
+    WITH ENTRY DO BEGIN
+      WRITE(FILLCH, FILLCH, NAME, ' ', LVL:1, ' ', SCR:5, ' **');
+      WRITELN
+    END;
+    FOR J := 19 DOWNTO I DO
       HIGH[J+1] := HIGH[J];
     HIGH[I] := ENTRY;
     I := I + 1
-  end;
-  while I < 20 do begin
-    with HIGH[I] do
-      if NAME[1] <> ' ' then begin
-        write(FILLCH, FILLCH, NAME, ' ', LVL:1, ' ', SCR:5);
-        writeln
-      end;
+  END;
+  WHILE I < 20 DO BEGIN
+    WITH HIGH[I] DO
+      IF NAME[1] # ' ' THEN BEGIN
+        WRITE(FILLCH, FILLCH, NAME, ' ', LVL:1, ' ', SCR:5);
+        WRITELN
+      END;
     I := I + 1
-  end;
-  write(chr(15))
-end;
+  END;
+  WRITE(CHR(17B))
+END;
 
-procedure WAIT(var TCK, PAU : integer);
-var A, B : integer;
-begin
+PROCEDURE WAIT(VAR TCK, PAU : INTEGER);
+VAR A, B : INTEGER;
+BEGIN
 (*$C
 	MOV	#^O177564,%1
 1$:	BIT	#^O100,(1)
@@ -156,261 +156,261 @@ begin
 4$:	SOB	%0,3$
 	SOB	%3,2$
 *)
-end;
+END;
 
-procedure SETUP;
-var I, J : integer;
+PROCEDURE SETUP;
+VAR I, J : INTEGER;
     T : SHP;
     EP, DP : PPAN;
 
-  procedure ROTATE(S : SHP);
-  var M : integer;
-  begin
-    with S do begin
+  PROCEDURE ROTATE(S : SHP);
+  VAR M : INTEGER;
+  BEGIN
+    WITH S DO BEGIN
       T.DX := DY;
-      for M := 1 to 4 do
+      FOR M := 1 TO 4 DO
         T.DY[M] := -DX[M]
-    end
-  end;
+    END
+  END;
 
-begin
-  with SHAPE[1] do
-    for I := 1 to 4 do begin
-      DY[I] := I div 3;
-      DX[I] := -(I mod 2)
-    end;
-  for J := 1 to 4 do
-    with SHAPE[J+3] do begin
-      for I := 1 to 3 do begin
+BEGIN
+  WITH SHAPE[1] DO
+    FOR I := 1 TO 4 DO BEGIN
+      DY[I] := I DIV 3;
+      DX[I] := -(I MOD 2)
+    END;
+  FOR J := 1 TO 4 DO
+    WITH SHAPE[J+3] DO BEGIN
+      FOR I := 1 TO 3 DO BEGIN
         DY[I] := 0;
         DX[I] := I-2
-      end;
+      END;
       DY[4] := 1;
       DX[4] := J-3
-    end;
+    END;
   SHAPE[4].DY[4] := 0;
   SHAPE[2] := SHAPE[6];
   SHAPE[2].DY[1] := 1;
   SHAPE[3] := SHAPE[6];
   SHAPE[3].DY[3] := 1;
   NXT[1] := 1;
-  for I := 2 to 4 do begin
+  FOR I := 2 TO 4 DO BEGIN
     ROTATE(SHAPE[I]);
     SHAPE[I+6] := T;
     NXT[I] := I+6;
     NXT[I+6] := I
-  end;
-  for I := 1 to 3 do begin
+  END;
+  FOR I := 1 TO 3 DO BEGIN
     T := SHAPE[I+4];
     NXT[I+4] := I*3+8;
-    for J := 1 to 3 do begin
+    FOR J := 1 TO 3 DO BEGIN
       ROTATE(T);
       SHAPE[I*3+7+J] := T;
       NXT[I*3+7+J] := I*3+8+J
-    end;
+    END;
     NXT[I*3+10] := I+4
-  end;
-  for I := 0 to 9 do
+  END;
+  FOR I := 0 TO 9 DO
     QUOTA[I] := I*10+5;
-  for I := 1 to 4 do begin
-    ERASE.G[I].EY := ORD(ESCCH) + 22784;
-    DRAW.G[I].EY := ORD(ESCCH) + 22784;
-    ERASE.G[I].CH := 11808;
-    DRAW.G[I].CH := 23899
-  end;
-  ERASE.G[5].EY := ORD(ESCCH) + 22784;
-  DRAW.G[5].EY := ORD(ESCCH) + 22784;
-  ERASE.G[5].RC := 8224;
-  DRAW.G[5].RC := 8224;
-  ERASE.G[5].CH := 3341;
-  DRAW.G[5].CH := 3341;
+  FOR I := 1 TO 4 DO BEGIN
+    ERASE.G[I].EY := ORD(ESCCH) + 54400B;
+    DRAW.G[I].EY := ORD(ESCCH) + 54400B;
+    ERASE.G[I].CH := 27040B;
+    DRAW.G[I].CH := 56533B
+  END;
+  ERASE.G[5].EY := ORD(ESCCH) + 54400B;
+  DRAW.G[5].EY := ORD(ESCCH) + 54400B;
+  ERASE.G[5].RC := 20040B;
+  DRAW.G[5].RC := 20040B;
+  ERASE.G[5].CH := 6415B;
+  DRAW.G[5].CH := 6415B;
   EP := @ERASE;
   DP := @DRAW;
   ERAP := EP;
   DRWP := DP;
-  for I := 1 to 20 do
+  FOR I := 1 TO 20 DO
     HIGH[I].NAME[1] := ' '
-end;
+END;
 
-procedure SIDEBR;
-var I : integer;
-begin
-  write(ESCCH, 'Y', CHR(43), CHR(48), '        ');
-  write(ESCCH, 'Y', CHR(44), CHR(48), '        ')
-end;
+PROCEDURE SIDEBR;
+VAR I : INTEGER;
+BEGIN
+  WRITE(ESCCH, 'Y', CHR(53B), CHR(60B), '        ');
+  WRITE(ESCCH, 'Y', CHR(54B), CHR(60B), '        ')
+END;
 
-procedure SHOWNX;
-var I : integer;
-begin
+PROCEDURE SHOWNX;
+VAR I : INTEGER;
+BEGIN
   SIDEBR;
-  with SHAPE[NXTPC] do
-    for I := 1 to 4 do
-      write(ESCCH, 'Y', CHR(DY[I]+43), CHR(DX[I]*2+52), '[]');
+  WITH SHAPE[NXTPC] DO
+    FOR I := 1 TO 4 DO
+      WRITE(ESCCH, 'Y', CHR(DY[I]+43), CHR(DX[I]*2+64B), '[]');
   SCORE := SCORE - 5
-end;
+END;
 
-procedure NEWGAM;
-var I, J : integer;
-begin
-  for I := 1 to 10 do
-    for J := 1 to 20 do
+PROCEDURE NEWGAM;
+VAR I, J : INTEGER;
+BEGIN
+  FOR I := 1 TO 10 DO
+    FOR J := 1 TO 20 DO
       WELL[I][J] := CHR(0);
-  for I := 1 to 10 do begin
+  FOR I := 1 TO 10 DO BEGIN
     WELL[I][0] := CHR(1);
     WELL[I][21] := CHR(1)
-  end;
-  for J := 0 to 21 do begin
+  END;
+  FOR J := 0 TO 21 DO BEGIN
     WELL[0][J] := CHR(1);
     WELL[11][J] := CHR(1)
-  end;
-  for J := 0 to 20 do
+  END;
+  FOR J := 0 TO 20 DO
     CNT[J] := 0;
   SCORE := 0;
   NXTPC := RANDOM(7)+1;
   SHOWN := FALSE;
   LINES := 0
-end;
+END;
 
-procedure DRAWFL(A, B : integer);
-var I, J : integer;
-begin
-  for J := A to B do begin
+PROCEDURE DRAWFL(A, B : INTEGER);
+VAR I, J : INTEGER;
+BEGIN
+  FOR J := A TO B DO BEGIN
     GOTOXY(27, J);
-    for I := 1 to 10 do
-      if WELL[I][J] <> CHR(0) then
-        write('[]')
-      else
-        write(' .')
-  end
-end;
+    FOR I := 1 TO 10 DO
+      IF WELL[I][J] # CHR(0) THEN
+        WRITE('[]')
+      ELSE
+        WRITE(' .')
+  END
+END;
 
-function CANFIT(X, Y : integer) : boolean;
-var K : integer;
-begin
+FUNCTION CANFIT(X, Y : INTEGER) : BOOLEAN;
+VAR K : INTEGER;
+BEGIN
   CANFIT := TRUE;
-  with CUR^ do
-    for K := 1 to 4 do
-      if WELL[X+DX[K], Y+DY[K]] <> CHR(0) then begin
+  WITH CUR^ DO
+    FOR K := 1 TO 4 DO
+      IF WELL[X+DX[K], Y+DY[K]] # CHR(0) THEN BEGIN
         CANFIT := FALSE;
         EXIT
-      end
-end;
+      END
+END;
 
-function NEWPC : boolean;
-var K : integer;
-begin
+FUNCTION NEWPC : BOOLEAN;
+VAR K : INTEGER;
+BEGIN
   CURPC := NXTPC;
   NXTPC := RANDOM(7)+1;
   CUR := @SHAPE[CURPC];
   XPOS := 6;
   YPOS := 1;
   NEWPC := CANFIT(XPOS, YPOS);
-  with CUR^ do
-    for CELL := 1 to 4 do begin
-      DRAW.G[CELL].RC := YPOS + 32 + DY[CELL] + ((XPOS + DX[CELL]) * 2 + 57) * 256;
+  WITH CUR^ DO
+    FOR CELL := 1 TO 4 DO BEGIN
+      DRAW.G[CELL].RC := YPOS + 40B + DY[CELL] + ((XPOS + DX[CELL]) * 2 + 71B) * 400B;
       ERASE.G[CELL].RC := DRAW.G[CELL].RC
-    end;
-  write(DRWP^.S);
-  if SHOWN then SHOWNX
-end;
+    END;
+  WRITE(DRWP^.S);
+  IF SHOWN THEN SHOWNX
+END;
 
-procedure MOVEDN;
-begin
-  write(ERAP^.S);
-  if CANFIT(XPOS, YPOS+1) then begin
-    for CELL := 1 to 4 do begin
+PROCEDURE MOVEDN;
+BEGIN
+  WRITE(ERAP^.S);
+  IF CANFIT(XPOS, YPOS+1) THEN BEGIN
+    FOR CELL := 1 TO 4 DO BEGIN
       DRAW.G[CELL].RC := DRAW.G[CELL].RC + 1;
       ERASE.G[CELL].RC := DRAW.G[CELL].RC
-    end;
+    END;
     YPOS := YPOS + 1
-  end
-  else
+  END
+  ELSE
     LANDED := TRUE;
-  write(DRWP^.S);
+  WRITE(DRWP^.S);
   SCORE := SCORE - 1
-end;
+END;
 
-procedure MOVELF;
-begin
-  write(ERAP^.S);
-  if CANFIT(XPOS-1, YPOS) then begin
-    for CELL := 1 to 4 do begin
-      DRAW.G[CELL].RC := DRAW.G[CELL].RC - 512;
+PROCEDURE MOVELF;
+BEGIN
+  WRITE(ERAP^.S);
+  IF CANFIT(XPOS-1, YPOS) THEN BEGIN
+    FOR CELL := 1 TO 4 DO BEGIN
+      DRAW.G[CELL].RC := DRAW.G[CELL].RC - 1000B;
       ERASE.G[CELL].RC := DRAW.G[CELL].RC
-    end;
+    END;
     XPOS := XPOS - 1;
     LANDED := FALSE
-  end;
-  write(DRWP^.S)
-end;
+  END;
+  WRITE(DRWP^.S)
+END;
 
-procedure MOVERT;
-begin
-  write(ERAP^.S);
-  if CANFIT(XPOS+1, YPOS) then begin
-    for CELL := 1 to 4 do begin
-      DRAW.G[CELL].RC := DRAW.G[CELL].RC + 512;
+PROCEDURE MOVERT;
+BEGIN
+  WRITE(ERAP^.S);
+  IF CANFIT(XPOS+1, YPOS) THEN BEGIN
+    FOR CELL := 1 TO 4 DO BEGIN
+      DRAW.G[CELL].RC := DRAW.G[CELL].RC + 1000B;
       ERASE.G[CELL].RC := DRAW.G[CELL].RC
-    end;
+    END;
     XPOS := XPOS + 1;
     LANDED := FALSE
-  end;
-  write(DRWP^.S)
-end;
+  END;
+  WRITE(DRWP^.S)
+END;
 
-procedure ROTPC;
-var OLD : PSHP;
-begin
+PROCEDURE ROTPC;
+VAR OLD : PSHP;
+BEGIN
   OLD := CUR;
   CUR := @SHAPE[NXT[CURPC]];
-  write(ERAP^.S);
-  if CANFIT(XPOS, YPOS) then begin
-    with CUR^ do
-      for CELL := 1 to 4 do
-        DRAW.G[CELL].RC := YPOS + 32 + DY[CELL] + ((XPOS + DX[CELL]) * 2 + 57) * 256;
+  WRITE(ERAP^.S);
+  IF CANFIT(XPOS, YPOS) THEN BEGIN
+    WITH CUR^ DO
+      FOR CELL := 1 TO 4 DO
+        DRAW.G[CELL].RC := YPOS + 40B + DY[CELL] + ((XPOS + DX[CELL]) * 2 + 71B) * 400B;
     CURPC := NXT[CURPC];
-    for CELL := 1 to 4 do
+    FOR CELL := 1 TO 4 DO
       ERASE.G[CELL].RC := DRAW.G[CELL].RC;
     LANDED := FALSE
-  end
-  else
+  END
+  ELSE
     CUR := OLD;
-  write(DRWP^.S)
-end;
+  WRITE(DRWP^.S)
+END;
 
-procedure DROP;
-var START : integer;
-begin
+PROCEDURE DROP;
+VAR START : INTEGER;
+BEGIN
   START := YPOS;
-  while CANFIT(XPOS, YPOS+1) do
+  WHILE CANFIT(XPOS, YPOS+1) DO
     YPOS := YPOS + 1;
-  for CELL := 1 to 4 do begin
+  FOR CELL := 1 TO 4 DO BEGIN
     ERASE.G[CELL].RC := DRAW.G[CELL].RC;
     DRAW.G[CELL].RC := DRAW.G[CELL].RC + (YPOS - START)
-  end;
-  write(ERAP^.S);
-  write(DRWP^.S);
+  END;
+  WRITE(ERAP^.S);
+  WRITE(DRWP^.S);
   LANDED := TRUE
-end;
+END;
 
-procedure CLRNXT;
-var I : integer;
-begin
-  for I := 0 to 6 do begin
+PROCEDURE CLRNXT;
+VAR I : INTEGER;
+BEGIN
+  FOR I := 0 TO 6 DO BEGIN
     GOTOXY(52, I+2);
-    write(ESCCH, 'K')
-  end
-end;
+    WRITE(ESCCH, 'K')
+  END
+END;
 
-procedure SPDUP;
-begin
+PROCEDURE SPDUP;
+BEGIN
   LEVEL := LEVEL + 1;
-  PAUSE := PAUSE - 30
-end;
+  PAUSE := PAUSE - 36B
+END;
 
-procedure KEY;
-var C : char;
-begin
+PROCEDURE KEY;
+VAR C : CHAR;
+BEGIN
   C := CHR(0);
 (*$C
 	EMT	^O340
@@ -419,142 +419,142 @@ begin
 1$:	EMT	^O340
 	BCC	1$
 *)
-  case C of
+  CASE C OF
     ' ', '5' : DROP;
     '7' : MOVELF;
     '8' : ROTPC;
     '9' : MOVERT;
-    '1' : begin
-            SHOWN := not SHOWN;
-            if SHOWN then
+    '1' : BEGIN
+            SHOWN := NOT SHOWN;
+            IF SHOWN THEN
               SHOWNX
-            else
+            ELSE
               SIDEBR
-          end;
-    '4' : if LEVEL < 9 then SPDUP;
+          END;
+    '4' : IF LEVEL < 9 THEN SPDUP;
     '2', '3' : ;
     '0' : CLRNXT
-  end
-end;
+  END
+END;
 
-procedure TITLE;
-begin
+PROCEDURE TITLE;
+BEGIN
   CLS;
   GOTOXY(35, 6);
-  write('[ ]');
+  WRITE('[ ]');
   GOTOXY(35, 7);
-  write(CHR(14), 't e t r i s', CHR(15));
+  WRITE(CHR(16B), 't e t r i s', CHR(17B));
   GOTOXY(43, 8);
-  write('[ ]');
+  WRITE('[ ]');
   GOTOXY(20, 20);
-  write(CHR(14), 'wa{ urowenx? (0-9) - ', CHR(15));
+  WRITE(CHR(16B), 'wa{ urowenx? (0-9) - ', CHR(17B));
   KEYIN(ANS);
   LEVEL := ORD(ANS) - ORD('0');
-  if LEVEL < 0 then
+  IF LEVEL < 0 THEN
     LEVEL := 0;
-  if LEVEL > 9 then
+  IF LEVEL > 9 THEN
     LEVEL := 9;
-  PAUSE := LEVEL * (-30) + 275
-end;
+  PAUSE := LEVEL * (-36B) + 423B
+END;
 
-procedure LOCKPC;
-var I : integer;
-begin
-  with CUR^ do
-    for I := 1 to 4 do begin
+PROCEDURE LOCKPC;
+VAR I : INTEGER;
+BEGIN
+  WITH CUR^ DO
+    FOR I := 1 TO 4 DO BEGIN
       WELL[XPOS+DX[I], YPOS+DY[I]] := CHR(1);
       CNT[YPOS+DY[I]] := CNT[YPOS+DY[I]] + 1
-    end;
+    END;
   SCORE := SCORE + 25 + LEVEL*3
-end;
+END;
 
-procedure CLRROW;
-label 2;
-var I, SRC, BOT, K, DST, J : integer;
-begin
+PROCEDURE CLRROW;
+LABEL 2;
+VAR I, SRC, BOT, K, DST, J : INTEGER;
+BEGIN
   DST := 0;
-  for I := 20 downto 1 do
-    if CNT[I] = 10 then begin
+  FOR I := 20 DOWNTO 1 DO
+    IF CNT[I] = 10 THEN BEGIN
       DST := I;
       EXIT
-    end;
-  if DST = 0 then goto 2;
+    END;
+  IF DST = 0 THEN GOTO 2;
   BOT := DST;
   SRC := DST;
-  while (CNT[SRC] <> 0) and (SRC > 0) do begin
-    if CNT[SRC] <> 10 then begin
-      for J := 1 to 10 do
+  WHILE (CNT[SRC] # 0) AND (SRC > 0) DO BEGIN
+    IF CNT[SRC] # 10 THEN BEGIN
+      FOR J := 1 TO 10 DO
         WELL[J][DST] := WELL[J][SRC];
       CNT[DST] := CNT[SRC];
       DST := DST - 1
-    end
-    else begin
+    END
+    ELSE BEGIN
       GOTOXY(27, SRC);
-      for I := 1 to 10 do
-        write(' .');
+      FOR I := 1 TO 10 DO
+        WRITE(' .');
       LINES := LINES + 1;
-      if (LINES > QUOTA[LEVEL]) and (LEVEL < 9) then begin
-        write(CHR(7));
+      IF (LINES > QUOTA[LEVEL]) AND (LEVEL < 9) THEN BEGIN
+        WRITE(CHR(7));
         SPDUP
-      end
-    end;
+      END
+    END;
     SRC := SRC - 1
-  end;
-  for K := SRC+1 to DST do begin
-    for J := 1 to 10 do
+  END;
+  FOR K := SRC+1 TO DST DO BEGIN
+    FOR J := 1 TO 10 DO
       WELL[J][K] := CHR(0);
     CNT[K] := 0
-  end;
+  END;
   DRAWFL(SRC, BOT);
-2: end;
+2: END;
 
-procedure REPORT;
-var T : integer;
-begin
+PROCEDURE REPORT;
+VAR T : INTEGER;
+BEGIN
   GOTOXY(0, 0);
-  write(CHR(14), '
+  WRITE(CHR(16B), '
 polnyh strok:', LINES:3, '
 urowenx:     ', LEVEL:3, '
-  s~et:  ', SCORE mod 1000 :3, CHR(15));
-  writeln;
-  for T := 1 to SCORE div 1000 do begin
-    write(' $');
-    if T mod 5 = 0 then
-      writeln
-  end
-end;
+  s~et:  ', SCORE MOD 1000 :3, CHR(17B));
+  WRITELN;
+  FOR T := 1 TO SCORE DIV 1000 DO BEGIN
+    WRITE(' $');
+    IF T MOD 5 = 0 THEN
+      WRITELN
+  END
+END;
 
-procedure HELP;
-var I : integer;
-begin
-  for I := 1 to 20 do begin
+PROCEDURE HELP;
+VAR I : INTEGER;
+BEGIN
+  FOR I := 1 TO 20 DO BEGIN
     GOTOXY(25, I);
-    write('<! . . . . . . . . . .!>')
-  end;
+    WRITE('<! . . . . . . . . . .!>')
+  END;
   GOTOXY(25, 21);
-  write('<!====================!>');
+  WRITE('<!====================!>');
   GOTOXY(25, 22);
-  write('  \/\/\/\/\/\/\/\/\/\/');
+  WRITE('  \/\/\/\/\/\/\/\/\/\/');
   GOTOXY(52, 2);
-  write(CHR(14), '7: nalewo   9: naprawo');
+  WRITE(CHR(16B), '7: nalewo   9: naprawo');
   GOTOXY(52, 3);
-  write('     8:poworot ');
+  WRITE('     8:poworot ');
   GOTOXY(52, 4);
-  write('4:uskoritx  5:sbrositx');
+  WRITE('4:uskoritx  5:sbrositx');
   GOTOXY(52, 5);
-  write('1: pokazatx  sledu`}u`');
+  WRITE('1: pokazatx  sledu`}u`');
   GOTOXY(52, 6);
-  write('0:  steretx |tot tekst');
+  WRITE('0:  steretx |tot tekst');
   GOTOXY(52, 7);
-  write('  probel - sbrositx', CHR(15))
-end;
+  WRITE('  probel - sbrositx', CHR(17B))
+END;
 
-begin
-  ESCCH := CHR(27);
-  FILLCH := CHR(9);
-  write(CHR(23), CHR(15));
+BEGIN
+  ESCCH := CHR(33B);
+  FILLCH := CHR(11B);
+  WRITE(CHR(27B), CHR(17B));
   SETUP;
-  TICKS := 48;
+  TICKS := 60B;
 1:
   TITLE;
   NEWGAM;
@@ -562,28 +562,28 @@ begin
   HELP;
   REPORT;
 (*$C	BIS	#^O10100,@#^O44 *)
-  while NEWPC do begin
+  WHILE NEWPC DO BEGIN
     LANDED := FALSE;
-    repeat
+    REPEAT
       WAIT(TICKS, PAUSE);
       KEY;
       MOVEDN;
       KEY
-    until LANDED;
+    UNTIL LANDED;
     LOCKPC;
     CLRROW;
     REPORT
-  end;
-  write(CHR(7));
+  END;
+  WRITE(CHR(7));
 (*$C
 1$:	EMT	^O340
 	BCC	1$
 *)
   SCORES(LEVEL, SCORE);
   GOTOXY(12, 23);
-  write(CHR(14), 'e}e parti`? (da/net) - ');
-  read(ANS);
-  readln;
-  write(CHR(15));
-  if (ANS = 'd') or (ANS = 'D') then goto 1
-end.
+  WRITE(CHR(16B), 'e}e parti`? (da/net) - ');
+  READ(ANS);
+  READLN;
+  WRITE(CHR(17B));
+  IF (ANS = 'd') OR (ANS = 'D') THEN GOTO 1
+END.
