@@ -245,7 +245,7 @@ BEGIN
   SIDEBR;
   WITH SHAPE[NXTPC] DO
     FOR I := 1 TO 4 DO
-      WRITE(ESCCH, 'Y', CHR(DY[I]+43), CHR(DX[I]*2+64B), '[]');
+      WRITE(ESCCH, 'Y', CHR(DY[I]+53B), CHR(DX[I]*2+64B), '[]');
   SCORE := SCORE - 5
 END;
 
