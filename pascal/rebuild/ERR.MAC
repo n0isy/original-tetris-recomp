@@ -1,0 +1,151 @@
+	.TITLE	$ERROR
+	.IDENT	/V1.2G/
+	.RADIX	8
+;
+;	PASCAL/RAFOS -- RUN-TIME ERROR REPORTING.
+;
+;	Recovered from TETRIS.SAV (023632..024257).  Which words are addresses
+;	and which are constants was not guessed but MEASURED (tools/remod.py):
+;	the same module is linked into several programs at different addresses,
+;	and every word is classified by what it moves with.
+;
+;	The caller writes the message into the code itself:
+;
+;		JSR	R0,$ERROR
+;		.BYTE	CLASS,NUMBER
+;		.WORD	LENGTH
+;		.ASCII	/TEXT/
+;		.EVEN
+;
+;	so R0 arrives pointing at the descriptor.  The text travels with the
+;	call site, and the way back is found by stepping over it.  CLASS 0 is
+;	fatal, 1 is an I/O error, 2 is a warning.
+;
+	.GLOBL	ERROR,$END
+
+;	Run-time system data area.  Laid out in full by $INIT; only the few
+;	cells this module touches are named here.
+;
+;		+10	the OUTPUT file block, as $INIT built it
+;		+12	the file block writes go to now
+;		+54	$USRPC -- PC saved on a trap
+;		+60	$FILE  -- the file being worked on
+;		+74	scratch room for the file name
+
+	.PSECT	RTSDAT,RW,D,GBL,REL,OVR
+RTSDAT:	.BLKB	606
+
+	.PSECT
+
+$ERROR::MOV	R0,-(SP)
+	MOV	R1,-(SP)
+	MOV	R2,-(SP)
+	MOV	R3,-(SP)
+	MOV	R4,-(SP)
+	MOV	R5,-(SP)
+	MOV	RTSDAT+54,-(SP)
+	MOV	RTSDAT+60,-(SP)
+	MOV	RTSDAT+12,-(SP)
+	MOV	RTSDAT+10,RTSDAT+12	; say it to the terminal, not to a file
+
+;	Nine arguments for the PASCAL half, pushed left to right.
+
+	CLR	-(SP)
+	MOVB	(R0)+,(SP)		; 1  class
+	CLR	-(SP)
+	MOVB	(R0)+,(SP)		; 2  number
+	MOV	(R0)+,-(SP)		; 3  length of the text
+	MOV	R0,-(SP)		; 4  and where it starts
+	MOV	RTSDAT+60,-(SP)		; 5  the file block
+	CLR	-(SP)
+	MOVB	52,(SP)			; 6  $ERRBYT, the monitor's own code
+	MOV	RTSDAT+54,-(SP)		; 7  PC of the failure
+	CLR	-(SP)			; 8  length of the file name
+	MOV	#RTSDAT+74,-(SP)	; 9  and where it is
+
+	CMP	20(SP),#1		; class 1: name the file it happened on
+	BNE	CALLIT
+
+;	Spell the file out of its block as DEV:NAMENAME.EXT.
+
+	MOV	(SP),R0
+	MOV	RTSDAT+60,R5
+	BIS	#1000,2(R5)
+	ADD	#4,R5			; -> DEV, NAME, NAME, EXT in RADIX-50
+	MOV	(R5)+,R3
+	BEQ	NODEV
+	JSR	PC,PUTR50
+	MOVB	#':,(R0)+
+NODEV:	MOV	(R5)+,R3
+	BEQ	NOEXT
+	JSR	PC,PUTR50
+	MOV	(R5),R3
+	JSR	PC,PUTR50
+NOEXT:	MOV	2(R5),R3
+	BEQ	NAMED
+	MOVB	#'.,(R0)+
+	JSR	PC,PUTR50
+NAMED:	SUB	(SP),R0			; how much of the buffer was used
+	MOV	R0,2(SP)
+
+CALLIT:	EMT	355			; .RCTRLO -- undo a CTRL/O, or nobody
+	JSR	PC,ERROR		; sees it.  PASCAL does the printing.
+
+	MOV	(SP)+,RTSDAT+12
+	MOV	(SP)+,RTSDAT+60
+	MOV	(SP)+,RTSDAT+54
+	MOV	(SP)+,R5
+	MOV	(SP)+,R4
+	MOV	(SP)+,R3
+	MOV	(SP)+,R2
+	MOV	(SP)+,R1
+	MOV	(SP)+,R0
+
+;	A warning lets the program go on; anything else ends it.
+
+	CMPB	(R0),#2
+	BEQ	RESUME
+	BISB	#10,53			; severity byte for the monitor: fatal
+	JMP	$END
+RESUME:	BISB	#2,53			; severity: an error, but we continue
+	ADD	2(R0),R0		; step R0 over the descriptor: text,
+	ADD	#5,R0			; the length word, the two bytes,
+	BIC	#1,R0			; and round up to the next word
+	RTS	R0
+
+;	RADIX-50 word in R3 -> characters at (R0)+.  Divide by 1600, then by
+;	40, then by 1, taking one code each time.  The divisors are walked
+;	backwards from R50CHR and a zero ends the run.
+
+PUTR50:	MOV	#R50CHR,R1
+NXTDIV:	TST	-(R1)
+	BEQ	R50X
+	CLR	R2
+DIVLP:	INC	R2
+	SUB	(R1),R3
+	BCC	DIVLP
+	DEC	R2			; one too far
+	ADD	(R1),R3
+	MOVB	R50CHR(R2),R2
+	BEQ	NXTDIV			; code 0 is a space -- do not write it
+	MOVB	R2,(R0)+
+	BR	NXTDIV
+R50X:	RTS	PC
+
+	.WORD	0
+	.WORD	1
+	.WORD	50
+	.WORD	3100
+
+;	The RADIX-50 alphabet, indexed by code.
+;
+;	Look at the end of it: this build lost the digit 8.  Code 38 gives "9"
+;	and code 39 gives nothing, so a file on DX8: or DX9: would be misnamed
+;	in the message.  PASMIX.OBJ of 13-03-1986 has ...4567 8 9 here, but
+;	TETRIS.SAV -- and every other program carrying this runtime that was
+;	found on the tapes -- has ...4567 9 <0>.  Kept as it really is.
+
+R50CHR:	.ASCII	<0>/ABCDEFGHIJKLMNOPQRSTUVWXYZ$.?/
+	.ASCII	/012345679/<0>
+
+	.END

@@ -1,0 +1,510 @@
+	.TITLE	$IO
+	.IDENT	/V1.2G/
+	.RADIX	8
+	.GLOBL	$ERROR,$DISPO
+	.PSECT	RTSDAT,RW,D,GBL,REL,OVR
+RTSDAT:	.BLKB	606
+	.PSECT
+;	CHKEOF = +1170
+;	CLRSCR = +76
+;	HISTK = +1522
+;	LOWSTK = +1476
+;	NXTBUF = +656
+;	READ = +2024
+;	TSTCHN = +0
+;	$BREAK = +1436
+;	$B60 = +444
+;	$B61 = +222
+;	$B62 = +1430
+;	$B68 = +1220
+;	$CLOSE = +1260
+;	$GET = +230
+;	$GETCH = +230
+;	$PUT = +452
+;	$SETIO = +116
+;	$ZAPCH = +1552
+;	$CHAN0 = +14
+;	$KORE = +62
+TSTCHN::  	TST R5
+          	BEQ IO72
+          	CMP R5,RTSDAT+70
+          	BCC IO72
+          	BIT #1,R5
+          	BNE IO72
+          	CLR R0
+          	BISB 16(R5),R0
+          	CMP R0,#377
+          	BEQ IO66
+          	CMP R0,#17
+          	BHI IO72
+          	CMP RTSDAT+4,R5
+          	BEQ IO66
+          	CMP RTSDAT+10,R5
+          	BEQ IO66
+          	ASL R0
+          	CMP RTSDAT+14(R0),R5
+          	BNE IO72
+IO66:     	TST (R5)+
+          	RTS PC
+IO72:     	SEC
+          	RTS PC
+CLRSCR::  	MOV #RTSDAT+132,R0
+          	MOV #226,R1
+IO106:    	CLR (R0)+
+          	DEC R1
+          	BNE IO106
+          	RTS PC
+$SETIO::  	MOV 2(SP),RTSDAT+54
+          	MOV (R5)+,-(SP)
+          	ADD SP,(SP)
+          	MOV R1,-(SP)
+          	MOV R0,-(SP)
+          	MOV R5,-(SP)
+          	MOV RTSDAT+60,R5
+          	JSR PC,TSTCHN
+          	BCC IO176
+IO150:    	JSR	R0,$ERROR
+	.BYTE	0,36		; class, error number
+	.WORD	15
+	.ASCII	/FILE NOT OPEN/
+	.EVEN
+IO176:    	JSR PC,@(SP)+
+          	MOV (SP)+,R0
+          	MOV (SP)+,R1
+          	MOV 2(SP),R5
+          	MOV 4(SP),@0(SP)
+          	MOV (SP),SP
+          	RTS PC
+$B61::    	JSR R5,$SETIO
+          	IOT
+$GETCH::
+$GET::    	BIT #14,(R5)
+          	BNE IO260
+IO236:    	JSR	R0,$ERROR
+	.BYTE	1,22		; class, error number
+	.WORD	12
+	.ASCII	/CAN'T READ/
+	.EVEN
+IO260:    	BIC #44000,(R5)
+          	BPL IO312
+IO266:    	JSR	R0,$ERROR
+	.BYTE	1,21		; class, error number
+	.WORD	13
+	.ASCII	/END OF FILE/
+	.EVEN
+IO312:    	BIT #200,(R5)
+          	BNE IO340
+          	JSR PC,IO574
+          	CMP 30(R5),R0
+          	BCC IO336
+          	JSR PC,IO654
+IO336:    	RTS PC
+IO340:    	INC -(R5)
+          	CMP (R5)+,30(R5)
+          	BCS IO354
+          	JSR PC,IO654
+IO354:    	TST (R5)
+          	BMI IO426
+          	MOVB @177776(R5),R0
+          	BIC #177600,R0
+          	BEQ IO340
+          	CMPB #15,R0
+          	BEQ IO340
+          	CMPB #12,R0
+          	BEQ IO426
+          	CMPB #33,R0
+          	BEQ IO426
+          	CMPB #32,R0
+          	BNE IO336
+          	BIS #100000,(R5)
+IO426:    	MOV #40,R0
+          	MOVB R0,@177776(R5)
+          	BIS #40000,(R5)
+          	RTS PC
+$B60::    	JSR R5,$SETIO
+          	IOT
+$PUT::    	BIT #24,(R5)
+          	BNE IO510
+IO460:    	JSR	R0,$ERROR
+	.BYTE	1,23		; class, error number
+	.WORD	17
+	.ASCII	/PUT NOT ALLOWED/
+	.EVEN
+IO510:    	JSR PC,IO574
+          	BIS #1,(R5)
+          	CMP 30(R5),177776(R5)
+          	BCC IO536
+          	MOV 177776(R5),30(R5)
+IO536:    	CMPB #377,14(R5)
+          	BNE IO554
+          	JSR PC,IO1434
+          	RTS PC
+IO554:    	SUB 20(R5),R0
+          	CMP 22(R5),R0
+          	BCC IO572
+          	JSR PC,IO654
+IO572:    	RTS PC
+IO574:    	ADD 26(R5),-(R5)
+          	MOV (R5)+,R0
+          	BIT #2,(R5)
+          	BNE IO646
+          	SUB 20(R5),R0
+          	BIC #177000,R0
+          	ADD 26(R5),R0
+          	SUB #1000,R0
+          	BLOS IO642
+          	SUB 26(R5),R0
+          	SUB R0,177776(R5)
+IO642:    	MOV 177776(R5),R0
+IO646:    	ADD 26(R5),R0
+          	RTS PC
+IO654:    	MOV R1,-(SP)
+          	MOV R2,-(SP)
+          	MOV R3,-(SP)
+          	BIT #2,(R5)
+          	BEQ IO1070
+          	MOV 177776(R5),R0
+          	SUB 20(R5),R0
+          	BIC #777,R0
+          	MOV R0,R1
+          	ADD 20(R5),R0
+          	SUB 30(R5),R0
+          	BCC IO1070
+          	NEG R0
+          	BIT #1,(R5)
+          	BEQ IO734
+          	JSR PC,IO2520
+IO734:    	SUB R1,177776(R5)
+          	SUB R1,30(R5)
+          	MOV R1,R2
+          	SWAB R2
+          	ASR R2
+          	ADD R2,16(R5)
+          	BCC IO1006
+IO760:    	JSR	R0,$ERROR
+	.BYTE	1,41		; class, error number
+	.WORD	15
+	.ASCII	/FILE OVERFLOW/
+	.EVEN
+IO1006:   	MOV 20(R5),R2
+          	ADD R2,R1
+          	MOV R0,R3
+          	ASR R3
+IO1020:   	MOV (R1)+,(R2)+
+          	DEC R3
+          	BNE IO1020
+          	BIT #14,(R5)
+          	BEQ IO1066
+          	MOV R0,RTSDAT+136
+          	MOV R0,RTSDAT+140
+          	NEG RTSDAT+140
+          	CLRB R0
+          	SWAB R0
+          	ASR R0
+          	MOV R0,RTSDAT+134
+          	JSR PC,IO2060
+IO1066:   	BR IO1160
+IO1070:   	BIT #1,(R5)
+          	BEQ IO1106
+          	JSR PC,IO2510
+          	BIC #20001,(R5)
+IO1106:   	MOV 30(R5),R0
+          	SUB 20(R5),R0
+          	ADD #777,R0
+          	CLRB R0
+          	SWAB R0
+          	ASR R0
+          	ADD R0,16(R5)
+          	BCS IO760
+          	MOV 20(R5),-(R5)
+          	MOV (R5)+,30(R5)
+          	BIT #10,(R5)
+          	BEQ IO1160
+          	JSR PC,IO2022
+IO1160:   	MOV (SP)+,R3
+          	MOV (SP)+,R2
+          	MOV (SP)+,R1
+          	BIC #140000,(R5)
+          	MOV 177776(R5),R0
+          	ADD 26(R5),R0
+          	CMP 30(R5),R0
+          	BCC IO1214
+          	BIS #140000,(R5)
+IO1214:   	RTS PC
+          	MOV (SP),RTSDAT+54
+          	MOV R0,-(SP)
+          	MOV R1,-(SP)
+          	MOV R5,-(SP)
+          	MOV @RTSDAT+60,R5
+          	JSR PC,TSTCHN
+          	BCS IO1246
+          	JSR PC,IO1256
+IO1246:   	MOV (SP)+,R5
+          	MOV (SP)+,R1
+          	MOV (SP)+,R0
+          	RTS PC
+IO1256:   	MOV RTSDAT+60,-(SP)
+          	MOV @RTSDAT+60,RTSDAT+60
+          	JSR PC,IO1434
+          	MOV (SP)+,RTSDAT+60
+          	TST -(R5)
+          	CMP RTSDAT+4,R5
+          	BEQ IO1424
+          	CMP RTSDAT+10,R5
+          	BEQ IO1424
+          	TST (R5)+
+          	MOV 22(R5),R0
+          	BEQ IO1336
+          	MOV 20(R5),-(SP)
+          	JSR PC,$DISPO
+IO1336:   	CLR R0
+          	BISB 14(R5),R0
+          	CMPB R0,#377
+          	BEQ IO1420
+          	SWAB R0
+          	BISB #3,R0
+          	BIT #100,0(R5)
+          	BNE IO1372
+          	ASLB R0
+IO1372:   	SWAB R0
+          	MOV R0,R1
+          	BIC #177400,R0
+          	EMT 374
+          	JSR PC,IO1474
+          	MOV R1,R0
+          	EMT 374
+          	JSR PC,IO1520
+IO1420:   	JSR PC,IO1550
+IO1424:   	RTS PC
+          	JSR R5,$SETIO
+          	IOT
+IO1434:   	BIT #1,(R5)
+          	BEQ IO1472
+          	JSR PC,IO2510
+          	BIC #20001,(R5)
+          	BITB #200,25(R5)
+          	BNE IO1472
+          	MOV 20(R5),-(R5)
+          	MOV (R5)+,30(R5)
+IO1472:   	RTS PC
+IO1474:   	CMP SP,#32410
+          	BLOS IO1516
+          	MOV (SP),RTSDAT+602
+          	MOV SP,RTSDAT+604
+          	MOV #RTSDAT+602,SP
+IO1516:   	RTS PC
+IO1520:   	ROR -(SP)
+          	CMP SP,#RTSDAT+600
+          	BLOS IO1534
+          	ROL (SP)+
+          	RTS PC
+IO1534:   	ROL (SP)+
+          	MOV (SP),@RTSDAT+604
+          	MOV RTSDAT+604,SP
+          	RTS PC
+IO1550:   	TST -(R5)
+          	CLR R0
+          	BISB 16(R5),R0
+          	CMP R0,#377
+          	BEQ IO1732
+          	ASL R0
+          	CLR RTSDAT+14(R0)
+          	MOV #RTSDAT+14,R1
+IO1600:   	MOV (R1)+,R0
+          	BEQ IO1620
+          	CMP R0,R5
+          	BEQ IO1620
+          	CMPB 26(R0),26(R5)
+          	BEQ IO1730
+IO1620:   	CMP R1,#RTSDAT+54
+          	BCS IO1600
+          	MOV 4(R5),RTSDAT+144
+          	JSR PC,IO1474
+          	EMT 346
+          	MOV #RTSDAT+144,R0
+          	MOV #RTSDAT+132,-(SP)
+          	EMT 342
+          	BCS IO1730
+          	MOV RTSDAT+136,R1
+          	SUB #6,R1
+          	CMP R1,RTSDAT+2
+          	BCS IO1730
+          	CMP R1,RTSDAT+62
+          	BCC IO1730
+          	MOV #RTSDAT+144,R0
+          	CLR -(SP)
+          	EMT 343
+          	BCS IO1730
+          	EMT 347
+          	MOV R1,-(SP)
+          	MOV RTSDAT+134,R0
+          	JSR PC,$DISPO
+IO1730:   	EMT 347
+IO1732:   	CLR @RTSDAT+60
+          	CMP RTSDAT+6,R5
+          	BNE IO1760
+          	MOV RTSDAT+4,RTSDAT+6
+          	MOV RTSDAT+4,@RTSDAT+60
+IO1760:   	CMP RTSDAT+12,R5
+          	BNE IO2002
+          	MOV RTSDAT+10,RTSDAT+12
+          	MOV RTSDAT+10,@RTSDAT+60
+IO2002:   	MOV #36,R0
+          	MOV R5,-(SP)
+          	JSR PC,$DISPO
+          	JSR PC,IO1520
+          	RTS PC
+IO2022:   	JSR PC,CLRSCR
+          	MOV 0(R5),R0
+          	BIC #167777,R0
+          	CMPB #377,14(R5)
+          	BNE IO2060
+          	BIC #10000,44
+          	BIS R0,44
+IO2060:   	BIT #40,(R5)
+          	BEQ IO2070
+          	RTS PC
+IO2070:   	MOV #RTSDAT+132,R0
+          	MOV R0,-(SP)
+          	MOV R1,-(SP)
+          	MOV R2,-(SP)
+          	MOVB 14(R5),(R0)+
+          	MOVB #10,(R0)+
+          	ADD 16(R5),(R0)+
+          	ADD 20(R5),(R0)
+          	MOV (R0)+,30(R5)
+          	ADD 22(R5),(R0)
+          	INC (R0)
+          	ASR (R0)+
+          	CLR (R0)+
+          	CMPB #377,14(R5)
+          	BNE IO2270
+          	MOV (R5),R1
+          	BIC #167777,R1
+          	BIC #10000,@#44
+          	BIS R1,@#44
+          	CLR R0
+          	MOV RTSDAT+136,R1
+          	MOV RTSDAT+140,R2
+          	ASL R2
+          	BEQ IO2242
+IO2206:   	EMT 340
+          	BCS IO2206
+          	CMPB R0,#32
+          	BEQ IO2242
+          	MOVB R0,(R1)+
+          	DEC R2
+          	BEQ IO2242
+          	CMPB R0,#12
+          	BEQ IO2242
+          	BIT #10000,(R5)
+          	BEQ IO2206
+IO2242:   	MOV R0,R1
+          	MOV RTSDAT+140,R0
+          	ASL R0
+          	SUB R2,R0
+          	CMPB R1,#32
+          	BNE IO2474
+          	CLRB 52
+          	BR IO2312
+IO2270:   	CLR R0
+          	BISB 14(R5),R0
+          	EMT 374
+          	MOV #RTSDAT+132,R0
+          	EMT 375
+          	BCC IO2472
+          	ASL R0
+IO2312:   	ADD R0,30(R5)
+          	TSTB 52
+          	BNE IO2332
+          	BIS #40,(R5)
+          	BR IO2500
+IO2332:   	MOVB #52,RTSDAT+56
+          	BISB #4,53
+          	BIT #1000,(R5)
+          	BNE IO2500
+          	CMPB 52,#1
+          	BGT IO2414
+          	BLT IO2444
+IO2366:   	JSR	R0,$ERROR
+	.BYTE	1,41		; class, error number
+	.WORD	16
+	.ASCII	/TRANSFER ERROR/
+	.EVEN
+IO2414:   	JSR	R0,$ERROR
+	.BYTE	1,36		; class, error number
+	.WORD	20
+	.ASCII	/CHANNEL NOT OPEN/
+	.EVEN
+IO2444:   	JSR	R0,$ERROR
+	.BYTE	1,41		; class, error number
+	.WORD	16
+	.ASCII	/WRITE PAST EOF/
+	.EVEN
+IO2472:   	ASL R0
+IO2474:   	ADD R0,30(R5)
+IO2500:   	MOV (SP)+,R2
+          	MOV (SP)+,R1
+          	MOV (SP)+,R0
+          	RTS PC
+IO2510:   	MOV 30(R5),R1
+          	SUB 20(R5),R1
+IO2520:   	MOV R0,-(SP)
+          	MOV R1,-(SP)
+          	MOV R2,-(SP)
+          	BITB #200,25(R5)
+          	BEQ IO2572
+          	MOV R1,R0
+          	BIC #177000,R0
+          	BEQ IO2572
+          	NEG R0
+          	ADD #1000,R0
+          	ADD 20(R5),R1
+IO2560:   	CLRB (R1)+
+          	DEC R0
+          	BNE IO2560
+          	SUB 20(R5),R1
+IO2572:   	TST R1
+          	BEQ IO2500
+          	CMPB 14(R5),#377
+          	BEQ IO2654
+          	MOV #RTSDAT+132,R2
+          	MOVB 14(R5),(R2)+
+          	MOVB #11,(R2)+
+          	MOV 16(R5),(R2)+
+          	MOV 20(R5),(R2)+
+          	INC R1
+          	ASR R1
+          	MOV R1,(R2)+
+          	CLR (R2)+
+          	MOV #RTSDAT+132,R0
+          	EMT 375
+          	BCS IO2332
+          	BR IO2500
+IO2654:   	MOV 20(R5),R2
+IO2660:   	MOVB (R2)+,R0
+IO2662:   	EMT 341
+          	BCS IO2662
+          	DEC R1
+          	BNE IO2660
+          	BR IO2500
+
+;	Symbols the rest of the library refers to.  Offsets are those of the
+;	PASSIM.OBJ variant shifted by the three edits this build carries:
+;	-2 after +0620 and -6 more after +2610.
+	.GLOBL	$CHAN0,$KORE,CHKEOF,$B68,$CLOSE,$B62,$BREAK,LOWSTK,READ
+	.GLOBL	NXTBUF,HISTK,$ZAPCH
+$CHAN0	= TSTCHN+14
+$KORE	= TSTCHN+62
+CHKEOF	= TSTCHN+1166
+$B68	= TSTCHN+1216
+$CLOSE	= TSTCHN+1256
+$B62	= TSTCHN+1426
+$BREAK	= TSTCHN+1434
+LOWSTK	= TSTCHN+1474
+READ	= TSTCHN+2022
+NXTBUF	= TSTCHN+654
+HISTK	= TSTCHN+1520
+$ZAPCH	= TSTCHN+1550
+
+	.END

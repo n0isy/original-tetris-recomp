@@ -1,0 +1,211 @@
+	.TITLE	$ARITH
+	.IDENT	/V1.2G/
+	.RADIX	8
+;
+;	PASCAL/RAFOS -- INTEGER MULTIPLY, DIVIDE AND REMAINDER.
+;
+;	Recovered from TETRIS.SAV (021416..022161).  Which words are addresses
+;	and which are constants was not guessed but MEASURED (tools/remod.py):
+;	the same module is linked into several programs at different addresses,
+;	and every word is classified by what it moves with.
+;
+;	The machine has no MUL or DIV -- this is an 11/03 -- so the compiler
+;	calls in here instead.  Both operands are on the stack; the answer goes
+;	back into the deeper of the two.
+;
+;	Two sets of entry points.  $B116/$B118/$B120 take the operand as it
+;	stands; $B78/$B80/$B82 sign-extend it first and check the result.
+;
+	.GLOBL	$ERROR
+
+;	Run-time system data area.  Laid out in full by $INIT; +54 is $USRPC,
+;	where the PC of a failure is left for the error reporter.
+
+	.PSECT	RTSDAT,RW,D,GBL,REL,OVR
+RTSDAT:	.BLKB	606
+
+	.PSECT
+
+$B116::	MOV	R0,-(SP)
+	MOV	R1,-(SP)
+	CLR	R0
+	MOV	10(SP),R1
+	JSR	PC,$MLSIM
+	BR	DONE
+
+$B118::	MOV	R0,-(SP)
+	MOV	R1,-(SP)
+	CLR	R0
+	MOV	10(SP),R1
+	JSR	PC,$DVSIM
+	BCS	DIVZER
+	MOV	R0,R1			; the quotient
+	BR	DONE
+
+$B120::	MOV	R0,-(SP)
+	MOV	R1,-(SP)
+	CLR	R0
+	MOV	10(SP),R1
+	JSR	PC,$DVSIM
+	BCS	DIVZER
+	BR	DONE			; the remainder, already in R1
+
+$B78::	MOV	R0,-(SP)
+	MOV	R1,-(SP)
+	CLR	R0
+	MOV	10(SP),R1
+	BPL	MUL78
+	COM	R0			; negative: sign-extend into R0
+MUL78:	JSR	PC,$MLSIM
+	BCS	OVFLOW
+	BR	DONE
+
+$B80::	MOV	R0,-(SP)
+	MOV	R1,-(SP)
+	CLR	R0
+	MOV	10(SP),R1
+	BPL	DIV80
+	COM	R0
+DIV80:	JSR	PC,$DVSIM
+	BCS	DIVZER
+	BVS	DIVZER
+	MOV	R0,R1
+	BR	DONE
+
+$B82::	MOV	R0,-(SP)
+	MOV	R1,-(SP)
+	CLR	R0
+	MOV	10(SP),R1
+	BPL	MOD82
+	COM	R0
+MOD82:	JSR	PC,$DVSIM
+	BCS	DIVZER
+	BVC	DONE
+
+;	Both messages sit in the code, the way $ERROR wants them.  Overflow is
+;	class 2, a warning: $ERROR comes back and the answer is pinned to the
+;	largest INTEGER.  Division by zero is class 0 and never returns.
+
+OVFLOW:	MOV	4(SP),RTSDAT+54
+	JSR	R0,$ERROR
+	.BYTE	2,24
+	.WORD	20
+	.ASCII	/INTEGER OVERFLOW/
+	.EVEN
+	BR	CLAMP
+
+DIVZER:	MOV	4(SP),RTSDAT+54
+	JSR	R0,$ERROR
+	.BYTE	0,5
+	.WORD	20
+	.ASCII	/DIVISION BY ZERO/
+	.EVEN
+
+CLAMP:	MOV	#77777,R1
+DONE:	MOV	R1,10(SP)
+	MOV	(SP)+,R1
+	MOV	(SP)+,R0
+	MOV	(SP)+,(SP)		; drop the second operand
+	RTS	PC
+
+;	R0:R1 times 16(SP), by shift and add.  R4 is the multiplier, walked one
+;	bit at a time from the bottom; R3:R2 is the multiplicand, doubled on
+;	every step.  The product comes back in R0:R1.
+
+$MLSIM::MOV	R4,-(SP)
+	MOV	R3,-(SP)
+	MOV	R2,-(SP)
+	MOV	16(SP),R4
+	BEQ	ZERO4
+	MOV	R1,R3
+	BEQ	ZERO3
+	CLR	R2
+	CLR	R1
+	CLR	R0
+SHIFT:	ROR	R4
+	BCC	NOADD
+	ADD	R3,R1
+	ADC	R0
+	ADD	R2,R0
+NOADD:	ASL	R3
+	ROR	R2
+	TST	R4
+	BNE	SHIFT
+
+;	R0 must have come out a plain sign extension of R1 -- 0 or -1 -- or the
+;	product did not fit.  Note what happens when it did not: SEC is undone
+;	by the CLC right after it, so the carry the caller tests always comes
+;	back clear.  Both PASMIX.OBJ of 13-03-1986 and TETRIS.SAV have it this
+;	way.  Kept as it really is.
+
+MLX:	MOV	(SP)+,R2
+	MOV	(SP)+,R3
+	MOV	(SP)+,R4
+	INC	R0
+	CMP	R0,#1
+	BLOS	MLRTS
+	SEC
+	CLC
+MLRTS:	RTS	PC
+
+ZERO4:	CLR	R1
+ZERO3:	CLR	R0
+	BR	MLX
+
+;	R0:R1 divided by 14(SP): quotient in R0, remainder in R1.  Carry set
+;	means the divisor was zero.
+;
+;	Both signs are worked out up front and stashed on the stack -- the copy
+;	of R0 keeps only its sign bit, and adding the divisor to it makes the
+;	sign of the quotient -- then everything is done on magnitudes and the
+;	answers are negated back at the end.
+
+$DVSIM::MOV	R4,-(SP)
+	MOV	R2,-(SP)
+	MOV	14(SP),R4
+	BNE	DIVOK
+	SEC
+	BR	DVX
+DIVOK:	MOV	R0,-(SP)		; sign of the remainder
+	MOV	R0,-(SP)		; and, once the divisor is added in,
+	BPL	POSNUM			; sign of the quotient
+	NEG	R1
+	CLR	R0
+	BIC	#77777,(SP)
+POSNUM:	ADD	R4,(SP)
+	TST	R4
+	BPL	POSDIV
+	NEG	R4
+POSDIV:	MOV	R4,R2
+
+;	Line the divisor up with the top of the dividend, then bring it down a
+;	bit at a time, subtracting where it fits.
+
+	CMP	R2,R1
+	BHI	STEP
+SCALE:	ASL	R2
+	BCS	STEP
+	CMP	R2,R1
+	BLOS	SCALE
+	BR	STEP
+DIVLP:	ASL	R0
+	CMP	R2,R1
+	BHI	STEP
+	SUB	R2,R1
+	INC	R0
+STEP:	ROR	R2
+	CMP	R2,R4
+	BCC	DIVLP
+
+	TST	(SP)+
+	BPL	NONEGQ
+	NEG	R0
+NONEGQ:	TST	(SP)+
+	BPL	NONEGR
+	NEG	R1
+NONEGR:	CLC
+DVX:	MOV	(SP)+,R2
+	MOV	(SP)+,R4
+	RTS	PC
+
+	.END

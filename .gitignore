@@ -1,0 +1,20 @@
+# build products of pascal/rebuild/rebuild.py and shift.py
+pascal/rebuild/work/
+
+# emulator and toolchain leftovers
+*.dsk
+!disks/blank.dsk
+*.rx01
+!pascal/sys-macro-link.rx01
+*.lda
+*.tap.tmp
+
+# python
+__pycache__/
+*.py[cod]
+
+# editors and systems
+.vscode/
+.idea/
+.DS_Store
+*~

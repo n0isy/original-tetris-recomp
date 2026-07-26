@@ -1,0 +1,498 @@
+	.TITLE	$FPSIM
+	.IDENT	/V1.2G/
+	.RADIX	8
+;
+;	PASCAL/RAFOS -- FLOATING POINT IN SOFTWARE.
+;
+;	Recovered from TETRIS.SAV (027154..031067).  Which words are addresses
+;	and which are constants was not guessed but MEASURED (tools/remod.py):
+;	the same module is linked into several programs at different addresses,
+;	and every word is classified by what it moves with.
+;
+;	An 11/03 has no FIS, so FADD/FSUB/FMUL/FDIV -- 075000 through 075037 --
+;	come in as reserved instruction traps.  SUPSIM catches them, works out
+;	which one it was and hands it to the same routine the PASCAL entry
+;	points use.  So there are two ways in and one body:
+;
+;		trap    -> SUPSIM -> FISTAB -> $B123/$B121/$B119/$B117 -> TRAPIN
+;		compiled call    -> $FADD/$FSUB/$FMUL/$FDIV            -> CALL
+;
+;	TRAPIN returns with RTI and has to build the condition codes in the
+;	saved status word by hand; CALL just returns.
+;
+;	A number is two words: R2:R3 is the first operand, R4:R5 the second,
+;	sign in the top bit, then eight bits of excess-200 exponent, then the
+;	fraction with its leading one left out.  The result comes back in R2:R3.
+;
+	.GLOBL	$ERROR
+
+;	Run-time system data area.  Laid out in full by $INIT; +54 is $USRPC,
+;	where the PC of a failure is left for the error reporter.
+
+	.PSECT	RTSDAT,RW,D,GBL,REL,OVR
+RTSDAT:	.BLKB	606
+
+	.PSECT
+
+;	Reserved instruction trap.  2(SP) is the PC pushed by the trap, so the
+;	word before it is the instruction that failed.  Bits 0-2 are the
+;	register field and mean nothing here; bits 3-4 pick the operation.
+
+SUPSIM::MOV	R0,-(SP)
+	MOV	2(SP),R0
+	MOV	-(R0),R0
+	SUB	#75000,R0
+	CMP	#37,R0
+	BCS	NOTFIS			; not one of ours
+	BIC	#7,R0
+	ASR	R0
+	ASR	R0
+	MOV	FISTAB(R0),R0
+	RTS	R0
+
+NOTFIS:	JSR	R0,$ERROR
+	.BYTE	0,35
+	.WORD	31
+	.ASCII	/RESERVED INSTRUCTION TRAP/
+	.EVEN
+
+FISTAB:	.WORD	FADD1			; 075000
+	.WORD	FSUB1			; 075010
+	.WORD	FMUL1			; 075020
+	.WORD	FDIV1			; 075030
+
+;	The four PASCAL entry points.  Each makes room on the stack for the
+;	answer, then goes to the common prologue with the address of the worker
+;	following the call.  A trap comes in below that, at the JSR itself: the
+;	room is already there, made by the trap.
+
+$B123::	MOV	(SP),-(SP)
+	CLR	2(SP)
+FADD1:	JSR	R0,TRAPIN
+	.WORD	FADDR
+
+$B121::	MOV	(SP),-(SP)
+	CLR	2(SP)
+FSUB1:	JSR	R0,TRAPIN
+	.WORD	FSUBR
+
+$B119::	MOV	(SP),-(SP)
+	CLR	2(SP)
+FMUL1:	JSR	R0,TRAPIN
+	.WORD	FMULR
+
+$B117::	MOV	(SP),-(SP)
+	CLR	2(SP)
+FDIV1:	JSR	R0,TRAPIN
+	.WORD	FDIVR
+
+;	Prologue for the trap path.  Both operands are picked up from the
+;	stack, the leading one of each fraction is put back, the worker runs,
+;	and the answer is written over the first operand.
+
+TRAPIN:	MOV	2(SP),RTSDAT+54		; where it happened, for the reporter
+	MOV	R1,-(SP)
+	MOV	R2,-(SP)
+	MOV	R3,-(SP)
+	MOV	R4,-(SP)
+	MOV	R5,-(SP)
+	MOV	SP,R1
+	ADD	#20,R1
+	MOV	(R1)+,R2
+	MOV	(R1)+,R3
+	MOV	(R1)+,R4
+	MOV	(R1)+,R5
+	ASL	R2
+	BEQ	SGN4			; zero stays zero
+	ROR	R2
+SGN4:	ASL	R4
+	BEQ	DOFUNC
+	ROR	R4
+DOFUNC:	JSR	PC,@(R0)+
+	MOV	R2,24(SP)
+	MOV	R3,26(SP)
+	MOV	(SP)+,R5
+	MOV	(SP)+,R4
+	MOV	(SP)+,R3
+	MOV	(SP)+,R2
+	MOV	(SP)+,R1
+	MOV	(SP)+,R0
+	MOV	(SP)+,2(SP)
+
+;	RTI will restore the status word, so the condition codes have to be put
+;	into the copy of it that is still on the stack.  Start from "zero" and
+;	correct it.
+
+	BIC	#17,(SP)
+	BIS	#4,(SP)			; Z
+	TST	6(SP)
+	BEQ	CCDONE
+	BPL	CCPOS
+	BIS	#10,(SP)		; N
+CCPOS:	BIC	#4,(SP)
+CCDONE:	MOV	(SP)+,2(SP)
+	RTI
+
+;	The same four operations, called outright by compiled code.
+
+$FDIV::	JSR	R0,CALL
+	.WORD	FDIVR
+$FMUL::	JSR	R0,CALL
+	.WORD	FMULR
+$FSUB::	JSR	R0,CALL
+	.WORD	FSUBR
+$FADD::	JSR	R0,CALL
+	.WORD	FADDR
+
+CALL:	MOV	R1,-(SP)
+	MOV	R4,-(SP)
+	MOV	R5,-(SP)
+	JSR	PC,@(R0)+
+	MOV	(SP)+,R5
+	MOV	(SP)+,R4
+	MOV	(SP)+,R1
+	MOV	(SP)+,R0
+	RTS	PC
+
+;	MULTIPLY.  Exponents are added, signs exclusive-ored -- that is what the
+;	rolling into the top of the stack word does -- and the two 24-bit
+;	fractions are multiplied a byte at a time into R2:R3:R4.
+
+FMULR:	MOV	R2,R0
+	BEQ	MZERO
+	CLR	-(SP)
+	ROL	R0
+	ROR	(SP)			; sign of the first operand
+	CLRB	R0
+	MOV	R4,R1
+	BEQ	MZERO1
+	CLR	-(SP)
+	ROL	R1
+	ROR	(SP)
+	CLRB	R1
+	ADD	(SP)+,(SP)		; both signs into one word
+	ADD	R1,R0
+	BCS	MEXP
+	COMB	R0
+MEXP:	SWAB	R0
+	MOV	R0,-(SP)		; exponent of the product
+	BIC	#177400,R2
+	BIS	#200,R2			; put the hidden bit back
+	BIC	#177400,R4
+	BIS	#200,R4
+	MOV	R3,-(SP)
+	SWAB	R4
+	SWAB	R5
+	BISB	R5,R4
+	CLRB	R5
+	MOV	R4,-(SP)
+	MOV	R2,R0
+	CLR	R1
+	CLR	R4
+	CLR	R3
+	CLR	R2
+
+MLOOP:	TST	R0
+	BNE	MSHIFT
+	SWAB	2(SP)			; next byte of the multiplier
+	BEQ	MDONE
+	BISB	2(SP),R0
+	CLRB	2(SP)
+	CLRB	R1
+	BISB	R5,R1
+	SWAB	R1
+	CLRB	R5
+	BISB	(SP),R5
+	SWAB	R5
+	CLRB	(SP)
+	SWAB	(SP)
+	BR	MLOOP
+MSHIFT:	ROR	(SP)
+	ROR	R5
+	ROR	R1
+	ASL	2(SP)
+	ROLB	R0
+	BCC	MLOOP
+	ADD	R1,R4
+	ADC	R3
+	ADC	R2
+	ADD	R5,R3
+	ADC	R2
+	ADD	(SP),R2
+	BR	MLOOP
+
+MDONE:	CMP	(SP)+,(SP)+
+	CLR	R4
+	JMP	NORM
+
+MZERO1:	TST	(SP)+
+MZERO:	CLR	R2
+	CLR	R3
+	RTS	PC
+
+;	DIVIDE.  Exponents are subtracted, then 31 steps of compare, subtract
+;	and shift build the quotient in R2:R3.
+
+FDIVR:	MOV	R2,R1
+	BEQ	DIVZER
+	CLR	-(SP)
+	ROL	R1
+	ROR	(SP)
+	CLRB	R1
+	MOV	R4,R0
+	BEQ	DZERO
+	CLR	-(SP)
+	ROL	R0
+	ROR	(SP)
+	CLRB	R0
+	ADD	(SP)+,(SP)
+	SUB	R1,R0
+	BCC	DEXP
+	COMB	R0
+DEXP:	SWAB	R0
+	MOV	R0,-(SP)
+	BIC	#177400,R2
+	BIS	#200,R2
+	BIC	#177400,R4
+	BIS	#200,R4
+	ADD	#10,(SP)
+	MOV	#31,-(SP)		; how many bits to make
+	MOV	R2,R0
+	MOV	R3,R1
+	CLR	R2
+	CLR	R3
+
+DLOOP:	CMP	R0,R4
+	BCS	DSUB
+	BHI	DBIT
+	CMP	R1,R5
+	BHI	DBIT
+DSUB:	SUB	R1,R5
+	SBC	R4
+	SUB	R0,R4
+	SEC				; this bit of the quotient is a one
+DBIT:	ROL	R3
+	ROL	R2
+	DEC	(SP)
+	BEQ	DDONE
+	ASL	R5
+	ROL	R4
+	BIT	#177600,R4
+	BEQ	DBIT
+	BR	DLOOP
+
+DDONE:	TST	(SP)+
+	CLR	R4
+	JMP	NORM
+
+DIVZER:	JSR	R0,$ERROR
+	.BYTE	0,5
+	.WORD	20
+	.ASCII	/DIVISION BY ZERO/
+	.EVEN
+
+DZERO:	TST	(SP)+
+	CLR	R2
+	CLR	R3
+	RTS	PC
+
+;	SUBTRACT is ADD with the sign of the first operand turned over.
+;
+;	ADD.  The smaller number is shifted right until the exponents agree --
+;	whole bytes first, then single bits -- both fractions are made into
+;	proper two's complement, and they are added.  The top of the stack
+;	carries the exponent, the word under it the sign of the answer.
+
+FSUBR:	ADD	#100000,R2
+
+FADDR:	CLR	-(SP)
+	MOV	#10,-(SP)
+	MOV	R2,R0
+	BEQ	ATAKE4			; first is zero: the answer is the second
+	ASL	R0
+	CLRB	R0
+	SWAB	R0
+	MOV	R4,R1
+	BEQ	APOP			; second is zero: keep the first
+	ASL	R1
+	CLRB	R1
+	SWAB	R1
+	SUB	R1,R0
+	BMI	ANEG
+	CMP	R0,#30			; second too small to matter?
+	BGT	APOP
+	ADD	R0,R1
+	BR	AEXP
+ANEG:	CMP	R0,#177750		; first too small to matter?
+	BLT	ATAKE4
+AEXP:	SUB	#200,R1
+	ADD	R1,(SP)
+
+	BIC	#77600,R4
+	BIS	#200,R4
+	BPL	APOS4
+	NEG	R5
+	ADC	R4
+	NEG	R4
+	BIS	#100000,R4
+APOS4:	BIC	#77600,R2
+	BIS	#200,R2
+	BPL	APOS2
+	NEG	R3
+	ADC	R2
+	NEG	R2
+	BIS	#100000,R2
+
+;	Line the two up.  R0 holds the difference of the exponents: positive
+;	means the second operand has to come down, negative the first.
+
+APOS2:	TST	R0
+	BMI	ASHR
+	BEQ	AZERO
+	CLR	R1
+ABYTE:	CMP	R0,#10
+	BLT	ABIT
+	CLRB	R1
+	BISB	R5,R1
+	SWAB	R1
+	CLRB	R5
+	BISB	R4,R5
+	SWAB	R5
+	SWAB	R4
+	MOVB	R4,R4			; keep the sign
+	SUB	#10,R0
+	BGT	ABYTE
+	BR	AADD
+ABIT:	ASR	R4
+	ROR	R5
+	ROR	R1
+	DEC	R0
+	BNE	ABIT
+	BR	AADD
+
+ASHR:	MOV	R0,R1
+	CLR	R0
+	NEG	R1
+BBYTE:	CMP	R1,#10
+	BLT	BBIT
+	CLRB	R0
+	BISB	R3,R0
+	SWAB	R0
+	CLRB	R3
+	BISB	R2,R3
+	SWAB	R3
+	SWAB	R2
+	MOVB	R2,R2
+	SUB	#10,R1
+	BGT	BBYTE
+	BEQ	AADD
+BBIT:	ASR	R2
+	ROR	R3
+	ROR	R0
+	DEC	R1
+	BNE	BBIT
+	BR	AADD
+
+AZERO:	CLR	R1
+	CLR	R0
+
+AADD:	ADD	R1,R0
+	ADC	R3
+	ADC	R2
+	ADD	R5,R3
+	ADC	R2
+	ADD	R4,R2
+	BPL	APOSR
+	NEG	R0			; came out negative: negate all of it
+	ADC	R3
+	ADC	R2
+	NEG	R3
+	ADC	R2
+	NEG	R2
+	COM	2(SP)			; and remember the sign
+APOSR:	MOV	R0,R4
+	BR	NORM
+
+ATAKE4:	MOV	R4,R2
+	MOV	R5,R3
+APOP:	CMP	(SP)+,(SP)+
+	RTS	PC
+
+;	Normalise R2:R3:R4 and pack it back into R2:R3 with the exponent from
+;	R1 and the sign from R0.  Too big a fraction is shifted right, too
+;	small a one left, by bytes while that is worth doing and then by bits.
+
+NORM:	MOV	(SP)+,R1
+	MOV	(SP)+,R0
+	SUB	#10,R1
+	MOV	R2,R5
+	BIS	R3,R5
+	BIS	R4,R5
+	BEQ	NRET			; the whole thing is zero
+	BIT	#177400,R2
+	BEQ	NSHL
+
+NBIG:	BPL	NSHR1
+	MOV	R3,R4
+	CLRB	R3
+	BISB	R2,R3
+	CLRB	R2
+	SWAB	R4
+	SWAB	R3
+	SWAB	R2
+	ADD	#10,R1
+	BR	NROUND
+NSHR1:	CLC
+	ROR	R2
+	ROR	R3
+	ROR	R4
+	INC	R1
+	BIT	#177400,R2
+	BNE	NBIG
+	BR	NROUND
+
+NSHL:	TST	R2
+	BNE	NTOP
+	SWAB	R3
+	BISB	R3,R2
+	CLRB	R3
+	SWAB	R4
+	BISB	R4,R3
+	CLRB	R4
+	SUB	#10,R1
+	BR	NSHL
+NSHL1:	CLC
+	ROL	R4
+	ROL	R3
+	ROL	R2
+	DEC	R1
+NTOP:	TSTB	R2
+	BPL	NSHL1
+
+NROUND:	ASL	R4
+	ADC	R3
+	ADC	R2
+	CLR	R4
+	BIT	#400,R2			; rounding pushed it over
+	BNE	NSHR1
+	ADD	#200,R1
+	SWAB	R1
+	BEQ	NPACK
+	BMI	NZERO			; exponent went below zero: underflow
+	JSR	R0,$ERROR
+	.BYTE	0,3
+	.WORD	27
+	.ASCII	/FLOATING POINT OVERFLOW/
+	.EVEN
+
+NZERO:	CLR	R2
+	CLR	R3
+	BR	NRET
+
+NPACK:	ASLB	R2			; drop the hidden bit
+	BIS	R1,R2			; put the exponent in
+	ASL	R0
+	ROR	R2			; and the sign on top
+NRET:	RTS	PC
+
+	.END

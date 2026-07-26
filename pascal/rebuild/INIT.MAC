@@ -1,0 +1,239 @@
+	.TITLE	$INIT
+	.IDENT	/V1.2G/
+	.RADIX	8
+;
+;	PASCAL/RAFOS -- PROGRAM STARTUP AND TRAP HANDLING.
+;
+;	Recovered from TETRIS.SAV (017252..020315).  Which words are addresses
+;	and which are constants was not guessed but MEASURED: the same module
+;	is linked into six programs at different addresses (tools/remod.py),
+;	and each word is classified by what it moves with.
+;
+;	Differs from the variant in PASSIM.OBJ of 13-03-1986: diagnostics are
+;	printed by its own routines through .TTYOUT instead of .PRINT/$ERROR,
+;	and no USR area is reserved (no SUB #214,R0).
+;
+	.GLOBL	$BEGIN,$CLOSE,$VER
+
+;	Run-time system data area.
+
+	.PSECT	RTSDAT,RW,D,GBL,REL,OVR
+RTSDAT:					; +0     base label
+$RESR6::.BLKW	1			; +0
+$RESR5::.BLKW	1			; +2
+	.BLKB	50			; +4
+$USRPC::.BLKW	1			; +54    PC saved on a trap
+	.BLKW	1			; +56
+$FILE::	.BLKW	1			; +60    chain of open files
+	.BLKW	1			; +62
+$FREE::	.BLKW	1			; +64
+	.BLKB	44			; +66
+RTAREA::.BLKB	454			; +132   monitor request area
+$STACK::				; +606   top: stack grows down
+
+;	Hooks for the debugger and for software floating point.
+
+	.PSECT	DBGLNK,RW,D,GBL,REL,OVR
+DBGLNK:	.BLKW	2
+	.PSECT	SIMLNK,RW,D,GBL,REL,OVR
+SIMLNK:	.BLKW	1
+$F8::
+
+	.PSECT
+
+;	Restart: if the debugger installed its entry, go there.
+
+INIT:	TST	DBGLNK+2
+	BNE	VIADBG
+	JMP	$END
+VIADBG:	JMP	@DBGLNK+2
+	BR	INIT
+
+;	Program entry point.
+
+$START::CMP	#14,#$VER		; our version against the compiler's
+	BEQ	VEROK
+	MOV	#BADVER,R0
+	JSR	PC,PRINT
+	BIS	#10,53			; tell the monitor it failed
+	EMT	350			; .EXIT
+
+VEROK:	MOV	#$STACK,SP
+	MOV	#177776,R0
+	CMP	42,LIMITS+2		; how much memory to ask for
+	BLOS	MEMOK
+	MOV	42,R0
+MEMOK:	EMT	354			; .SETTOP
+	MOV	R0,SP
+	MOV	R0,$RESR6
+	MOV	R0,RTSDAT+70
+	CLR	RTSDAT+64
+	CLR	RTSDAT+66
+	CLR	RTSDAT+56
+
+;	Two file blocks: terminal input and terminal output.
+
+	MOV	LIMITS+2,R5
+	MOV	R5,RTSDAT+4
+	MOV	R5,RTSDAT+6
+	MOV	R5,R0
+	ADD	#36,R5
+	MOV	R5,RTSDAT+10
+	MOV	R5,RTSDAT+12
+	MOV	R5,R1
+	ADD	#36,R5
+	MOV	R5,(R0)+
+	MOVB	#40,(R5)
+	ADD	#20,R5
+	MOV	R5,(R1)+
+	MOV	#4210,(R0)+
+	MOV	#100220,(R1)+
+	MOV	#77150,(R0)
+	MOV	(R0)+,(R1)+
+	MOV	#4,R2
+CLRFB:	CLR	(R0)+
+	CLR	(R1)+
+	DEC	R2
+	BNE	CLRFB
+	MOV	#4377,(R0)+
+	MOV	#4777,(R1)+
+	CLR	(R0)+
+	CLR	(R1)+
+	MOV	@RTSDAT+4,(R0)+
+	MOV	R5,(R1)+
+	MOV	#20,(R0)+
+	MOV	#100,(R1)+
+	MOV	#4,(R0)
+	MOV	(R0)+,(R1)+
+	MOV	#1,(R0)
+	MOV	(R0)+,(R1)+
+	MOV	@RTSDAT+4,(R0)+
+	MOV	R5,(R1)+
+	CLR	(R0)+
+	CLR	(R1)+
+	ADD	#100,R5
+	MOV	R5,RTSDAT+62
+	MOV	R5,R0
+
+;	Clear the heap and the channel table.
+
+CLRHP:	CLR	(R0)+
+	CMP	R0,RTSDAT+70
+	BCS	CLRHP
+	MOV	#20,R1
+	MOV	#RTSDAT+14,R0
+CLRCH:	CLR	(R0)+
+	DEC	R1
+	BNE	CLRCH
+
+;	Take over the traps.
+
+	BIS	#60000,44
+	MOV	#RTAREA,R0
+	MOV	#1400,(R0)
+	MOV	#TRAP,2(R0)
+	EMT	375			; .TRPSET
+	BIT	#1000,44
+	BEQ	GOUSER
+	MOV	#177777,RTSDAT+52
+
+;	Hand control to the Pascal program.
+
+GOUSER:	MOV	RTSDAT+4,-(SP)		; input file block
+	MOV	RTSDAT+10,-(SP)		; output file block
+	JMP	$BEGIN
+
+LIMITS:	.LIMIT				; filled in by the linker
+
+BADVER:	.ASCIZ	/BAD COMPILER VERSION/<15><12>
+RESINS:	.ASCIZ	/RESERVED INSTRUCTION TRAP/
+TRP4:	.ASCIZ	/TRAP TO 4/
+FROMPC:	.ASCIZ	/ - FROM PC /
+CRLF:	.ASCIZ	<15><12>
+	.EVEN
+
+;	Trap handler.  It prints by itself, character by character: by the time
+;	a trap fires the run-time system may already be unusable.
+
+TRAP:	MOV	R0,-(SP)
+	MOV	#TRP4,R0
+	BCC	TRPSAY
+	MOV	#RESINS,R0
+	TST	SIMLNK			; claimed by floating point?
+	BEQ	TRPSAY
+	MOV	#RTSDAT+112,R0
+	MOV	#1400,(R0)
+	MOV	#TRAP,2(R0)
+	EMT	375
+	MOV	(SP)+,R0
+	JMP	@SIMLNK
+
+TRPSAY:	EMT	355			; flush pending output
+	JSR	PC,PRINT
+	MOV	#FROMPC,R0
+	JSR	PC,PRINT
+	MOV	2(SP),R0
+	JSR	PC,PROCT
+	MOV	#CRLF,R0
+	JSR	PC,PRINT
+
+;	Termination: close open files and exit.
+
+$END::
+$B63::	TST	DBGLNK
+	BNE	VIADB2
+	MOV	#20,R3
+	MOV	#RTSDAT+14,R4
+CLSLP:	MOV	(R4)+,R5
+	BEQ	CLSNXT
+	BIT	#1,R5
+	BNE	CLSNXT
+	MOV	#RTSDAT+72,$FILE
+	MOV	R5,RTSDAT+72
+	TST	(R5)+
+	JSR	PC,$CLOSE
+CLSNXT:	DEC	R3
+	BNE	CLSLP
+	EMT	350			; .EXIT
+VIADB2:	JMP	@DBGLNK
+
+;	Print a zero-terminated string.
+
+PRINT:	MOV	R1,-(SP)
+	MOV	R0,R1
+PRTLP:	MOVB	(R1)+,R0
+	BEQ	PRTX
+PRTWT:	EMT	341			; .TTYOUT
+	BCS	PRTWT
+	BR	PRTLP
+PRTX:	MOV	(SP)+,R1
+	RTS	PC
+
+;	Print a six-digit octal number: first digit from two bits, the other
+;	five from three bits each.
+
+PROCT:	MOV	R1,-(SP)
+	MOV	R2,-(SP)
+	MOV	R0,R1
+	CLR	R0
+	ASL	R1
+	ROL	R0
+	MOV	#6,R2
+	BR	OCTDIG
+OCTLP:	CLR	R0
+	ASL	R1
+	ROL	R0
+	ASL	R1
+	ROL	R0
+	ASL	R1
+	ROL	R0
+OCTDIG:	ADD	#60,R0
+OCTWT:	EMT	341
+	BCS	OCTWT
+	DEC	R2
+	BNE	OCTLP
+	MOV	(SP)+,R2
+	MOV	(SP)+,R1
+	RTS	PC
+
+	.END	$START			; transfer address of the whole program
