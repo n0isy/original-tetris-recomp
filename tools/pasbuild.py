@@ -46,9 +46,13 @@ def build(pas_path, name=None, lib="PASSIM", switches="", keep=None, extra=()):
     """
     import pexpect
     name = (name or os.path.basename(pas_path).split(".")[0])[:6].upper()
+    # Исходник в рабочем каталоге хранится обычным текстом: LF, без ^Z и без
+    # блочного паддинга RT-11. Всё это -- забота файловой системы тома, поэтому
+    # паддинг добавляется здесь при выгрузке и никогда не попадает в файл.
     src = open(pas_path, "rb").read()
-    if not src.endswith(b"\x1a"):
-        src = src.replace(b"\n", b"\r\n").replace(b"\r\r", b"\r") + b"\x1a"
+    src = src.replace(b"\x00", b"").replace(b"\x1a", b"")
+    src = src.replace(b"\r\n", b"\n").rstrip() + b"\n"
+    src = src.replace(b"\n", b"\r\n") + b"\x1a"
     rx = tempfile.NamedTemporaryFile(suffix=".rx01", delete=False).name
     make_disk(src, name, [lib], rx, extra)
 
@@ -71,10 +75,24 @@ def build(pas_path, name=None, lib="PASSIM", switches="", keep=None, extra=()):
     c.expect(r"w02\.00")
     wait(r"\r\n\.", "загрузка")
     c.sendline("RUN DX1:PASCAL");            wait(r"\*", "запуск компилятора")
-    c.sendline(f"DX1:{name}{switches}=DX1:{name}")
+    c.sendline(f"DX1:{name},DX1:{name}{switches}=DX1:{name}")
     wait(r"ERRORS DETECTED:\s*\d+", "компиляция")
     errs = re.search(r"ERRORS DETECTED:\s*(\d+)", log[-1])
+    n = int(errs.group(1)) if errs else -1
     wait(r"[.*]", "после компиляции"); c.send("\x03")
+    if n:                       # без .MAC дальше идти нечем -- забрать листинг
+        c.send("\x05"); c.expect(r"sim>")
+        c.sendline("detach all"); c.expect(r"sim>")
+        c.sendline("quit"); c.close(force=True)
+        dsk = rx.replace(".rx01", ".dsk")
+        open(dsk, "wb").write(to_logical(open(rx, "rb").read()))
+        v = RT11(dsk)
+        res = {q: v.read(q) for q, *_ in v.files() if q.startswith(name + ".")}
+        if keep:
+            for q, d in res.items():
+                open(os.path.join(keep, q), "wb").write(d)
+        os.unlink(ini.name)
+        return res, n, "".join(log)
     c.expect(r"\r\n\.")
     c.sendline("R MACRO");                   wait(r"\*", "запуск MACRO")
     c.sendline(f"DX1:{name}=DX1:{name}");    wait(r"ERRORS DETECTED:\s*\d+", "ассемблирование")
@@ -95,6 +113,8 @@ def build(pas_path, name=None, lib="PASSIM", switches="", keep=None, extra=()):
     res = {n: v.read(n) for n, *_ in v.files() if n.startswith(name + ".")}
     if keep:
         for n, d in res.items():
+            if n.endswith(".PAS"):
+                continue                # исходник не перезаписывать копией с тома
             open(os.path.join(keep, n), "wb").write(d)
     os.unlink(ini.name)
     return res, (int(errs.group(1)) if errs else -1), "".join(log)

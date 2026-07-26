@@ -18,3 +18,10 @@ __pycache__/
 .idea/
 .DS_Store
 *~
+
+# products of pascal/pas/build.py and step.py
+pascal/pas/GAME.MAC
+pascal/pas/GAME.OBJ
+pascal/pas/GAME.SAV
+pascal/pas/GAME.LST
+pascal/pas/TETPAS.SAV

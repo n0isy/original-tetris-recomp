@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
-Пересобрать рантайм тетриса из исходников и сверить с оригиналом.
+Пересобрать тетрис целиком из исходников и сверить с оригиналом.
 
-Проверка устроена так, чтобы сравнивать было с чем: вместо игрового модуля
-берётся заглушка **ровно того же размера** (`GAME.MAC`, 001000..017251).
-Тогда все модули рантайма ложатся по тем же адресам, что в `TETRIS.SAV`, и
-их можно сличать байт в байт, а не «по смыслу».
+Игра компилируется из `pascal/pas/GAME.PAS` настоящим ПАСКАЛЕМ, пять модулей
+рантайма ассемблируются из `.MAC` настоящим MACRO, остальные восемь берутся
+из уцелевших библиотек. Всё компонуется настоящим LINK и сличается байт в
+байт с `TETRIS.SAV`, включая md5.
 
 Порядок модулей задаётся списком ORDER: компоновщик берёт из обычного
 объектного файла всё подряд, в порядке файлов, и порядок влияет на адреса.
 
-  rebuild.py [-v]
+  rebuild.py
 """
-import os, subprocess, sys
+import hashlib, os, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, "..", "..")
@@ -21,6 +21,7 @@ sys.path.insert(0, ROOT)
 from objmix import spans                                       # noqa: E402
 from macasm import assemble                                    # noqa: E402
 from maclink import link                                       # noqa: E402
+from pasbuild import build                                     # noqa: E402
 
 ORDER = ["$INIT", "READS", "$READC", "$WRITI", "$WRITC", "$ARITH", "$CNVRT",
          "$REG", "$ALLOC", "$ERROR", "$IO", "$FPSIM", "$FSIM", "ERROR"]
@@ -33,7 +34,13 @@ WORK = os.path.join(HERE, "work")
 def main():
     os.makedirs(WORK, exist_ok=True)
     built = {}
-    for src in ("GAME", "INIT", "IO", "ARITH", "ERR", "FPSIM"):
+    res, errs, log = build(os.path.join(ROOT, "pascal", "pas", "GAME.PAS"),
+                           "GAME", keep=WORK)
+    if errs:
+        print(f"GAME.PAS: ошибок {errs}"); print(log[-1200:]); return 1
+    built["GAME"] = os.path.join(WORK, "GAME.OBJ")
+    print("  GAME.PAS -> GAME.OBJ, ошибок 0 (настоящий ПАСКАЛЬ)")
+    for src in ("INIT", "IO", "ARITH", "ERR", "FPSIM"):
         res, errs, log = assemble(os.path.join(HERE, src + ".MAC"), src, WORK)
         if errs:
             print(f"{src}.MAC: ошибок {errs}"); print(log[-1200:]); return 1
@@ -74,7 +81,11 @@ def main():
           f"различий {len(diff)} слов из {(HI-LO)//2}")
     for a in diff:
         print(f"   {a:06o}  наш {w(sav,a):06o}   оригинал {w(orig,a):06o}")
-    return 0
+    ours = hashlib.md5(sav).hexdigest()
+    theirs = hashlib.md5(orig[:len(sav)]).hexdigest()
+    print(f"md5 наш      {ours}")
+    print(f"md5 оригинал {theirs}   (первые {len(sav)} б)")
+    return 0 if not diff and ours == theirs else 1
 
 
 if __name__ == "__main__":

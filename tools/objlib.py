@@ -118,6 +118,9 @@ def _finish(m):
     m["image"] = bytes(buf)
     m["size"] = n
     m["rld"] = sorted(a for a in set(m["rld"]) if 0 <= a < n)
+    # какие байты модуль задаёт на самом деле: остальное -- пропуски, и в
+    # готовой программе там лежит что осталось в буфере компоновщика
+    m["set"] = frozenset(a for a in m["txt"] if a < n)
     del m["txt"]
     return m
 
